@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Drawing App with Code Export</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #toolbar {
+      background-color: #222;
+      color: #fff;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 4px solid #000;
+      flex-wrap: wrap;
+    }
+
+    #toolbar button, #toolbar select {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+    }
+
+    #toolbar button:hover {
+      background-color: #444;
+    }
+
+    #shapeOptions {
+      display: none;
+      position: absolute;
+      background-color: #333;
+      padding: 10px;
+      border-radius: 4px;
+      z-index: 100;
+      margin-top: 5px;
+    }
+
+    #shapeOptions button {
+      display: block;
+      width: 100%;
+      margin-bottom: 5px;
+      background-color: #444;
+      color: white;
+    }
+
+    #shapeOptions button:hover {
+      background-color: #555;
+    }
+
+    #mainContainer {
+      flex: 1;
+      display: flex;
+      border: 4px solid #000;
+      overflow: hidden;
+    }
+
+    #leftPane {
+      width: 60%;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      background-color: #fff;
+    }
+
+    #rightPane {
+      flex-grow: 1;
+      padding: 10px;
+      background-color: #f8f8f8;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #codeHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    #copyButton {
+      padding: 5px 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #copyButton:hover {
+      background-color: #45a049;
+    }
+
+    #divider {
+      width: 5px;
+      cursor: col-resize;
+      background-color: #aaa;
+      transition: background-color 0.2s;
+    }
+
+    #divider:hover {
+      background-color: #888;
+    }
+
+    canvas {
+      border: 1px solid #000;
+      display: block;
+      max-width: 100%;
+      cursor: crosshair;
+      background-color: white;
+      touch-action: none;
+    }
+
+    #codeDisplay {
+      width: 100%;
+      flex-grow: 1;
+      border: 1px solid #999;
+      white-space: pre;
+      overflow: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      padding: 10px;
+      background-color: #fff;
+      border-radius: 4px;
+    }
+
+    #toolbar button.active {
+      background-color: #555;
+      color: #fff;
+      border: 1px solid #fff;
+    }
+
+    .tool-option {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-right: 10px;
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      #mainContainer {
+        flex-direction: column;
+      }
+      #leftPane, #rightPane {
+        width: 100%;
+      }
+      #divider {
+        width: 100%;
+        height: 5px;
+        cursor: row-resize;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <div class="tool-group">
+      <button id="pen" class="active">Pen✒️</button>
+      <button id="eraser">Eraser</button>
+      <button id="shape">Shapes</button>
+      <div id="shapeOptions">
+  <button id="rectangle" class="shape-btn">Rectangle</button>
+  <button id="circle" class="shape-btn">Circle</button>
+  <button id="square" class="shape-btn">Square</button>
+  <button id="triangle" class="shape-btn">Triangle</button>
+  <button id="line" class="shape-btn">Line</button> <!-- New line -->
+</div>
+    </div>
+    <div class="tool-group">
+      <button id="undo">Undo↺</button>
+      <button id="redo">Redo↻</button>
+    </div>
+    <button id="clear">Clear❌</button>
+    <button id="export">Export Python Code</button>
+    <div class="tool-option">
+      <label for="colorPicker">Color:</label>
+      <input type="color" id="colorPicker" value="#000000" title="Select drawing color" />
+    </div>
+    <div class="tool-option">
+      <label for="sizePicker">Size:</label>
+      <input type="range" id="sizePicker" min="1" max="50" value="3" title="Adjust brush size" />
+      <span id="sizeValue">3</span>
+<button onclick="downloadCode()">Download Code</button>
+
+    </div>
+  </div>
+
+
+
+  <div id="mainContainer">
+    <div id="leftPane">
+      <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+    <div id="divider"></div>
+    <div id="rightPane">
+      <div id="codeHeader">
+        <h3>Generated Python Code</h3>
+        <button id="copyButton">Copy Code</button>
+      </div>
+      <div id="codeDisplay"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // DOM Elements
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const codeDisplay = document.getElementById('codeDisplay');
+  const sizeValue = document.getElementById('sizeValue');
+  const copyButton = document.getElementById('copyButton');
+  const shapeOptions = document.getElementById('shapeOptions');
+  
+  // Initialize canvas with white background
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Drawing state
+  let currentTool = 'pen';
+  let currentShape = 'rectangle';
+  let drawingData = [];
+  let history = [];
+  let historyIndex = -1;
+  let isDrawing = false;
+  let currentColor = '#000000';
+  let currentSize = 3;
+  let startX = 0;
+  let startY = 0;
+  let tempShape = null;
+
+  // Initialize the app
+  function init() {
+    // Save initial empty state
+    saveState();
+    
+    // Set up event listeners
+    setupEventListeners();
+    
+    // Update size display
+    sizeValue.textContent = currentSize;
+  }
+
+  // Set up all event listeners
+  function setupEventListeners() {
+    // Tool buttons
+    document.getElementById('pen').addEventListener('click', () => setTool('pen'));
+    document.getElementById('eraser').addEventListener('click', () => setTool('eraser'));
+    document.getElementById('shape').addEventListener('click', toggleShapeOptions);
+    
+    // Shape buttons
+    document.querySelectorAll('.shape-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        currentShape = e.target.id;
+        setTool('shape');
+        hideShapeOptions();
+      });
+    });
+    
+    // Undo/Redo
+    document.getElementById('undo').addEventListener('click', undo);
+    document.getElementById('redo').addEventListener('click', redo);
+    
+    // Clear and Export
+    document.getElementById('clear').addEventListener('click', clearCanvas);
+    document.getElementById('export').addEventListener('click', exportCode);
+    
+    // Copy button
+    copyButton.addEventListener('click', copyCode);
+    
+    // Color and size pickers
+    document.getElementById('colorPicker').addEventListener('input', (e) => {
+      currentColor = e.target.value;
+    });
+    
+    document.getElementById('sizePicker').addEventListener('input', (e) => {
+      currentSize = parseInt(e.target.value);
+      sizeValue.textContent = currentSize;
+    });
+    
+    // Canvas events
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    // Touch support
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', stopDrawing);
+    
+    // Close shape options when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#shape') && !e.target.closest('#shapeOptions')) {
+        hideShapeOptions();
+      }
+    });
+  }
+
+  // Set the current tool
+  function setTool(tool) {
+    currentTool = tool;
+    setActiveTool(tool === 'shape' ? 'shape' : tool);
+    canvas.style.cursor = 'crosshair';
+  }
+
+  // Start drawing
+  function startDrawing(e) {
+    e.preventDefault();
+    isDrawing = true;
+    const pos = getMousePos(e);
+    startX = pos.x;
+    startY = pos.y;
+    
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+      saveState();
+      drawingData.push({ 
+        tool: currentTool, 
+        points: [{x: startX, y: startY}], 
+        color: currentTool === 'pen' ? currentColor : '#FFFFFF', 
+        size: currentTool === 'pen' ? currentSize : 20 
+      });
+      
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    } else if (currentTool === 'shape') {
+      saveState();
+      tempShape = {
+        tool: 'shape',
+        shape: currentShape,
+        startX: startX,
+        startY: startY,
+        endX: startX,
+        endY: startY,
+        color: currentColor,
+        size: currentSize
+      };
+    }
+  }
+
+  // Draw on canvas
+  function draw(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    
+    const pos = getMousePos(e);
+    const currentX = pos.x;
+    const currentY = pos.y;
+    
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+      ctx.lineTo(currentX, currentY);
+      ctx.strokeStyle = currentTool === 'pen' ? currentColor : '#FFFFFF';
+      ctx.lineWidth = currentTool === 'pen' ? currentSize : 20;
+      ctx.stroke();
+      
+      const pathData = drawingData[drawingData.length - 1];
+      pathData.points.push({x: currentX, y: currentY});
+    } else if (currentTool === 'shape' && tempShape) {
+      tempShape.endX = currentX;
+      tempShape.endY = currentY;
+      redrawCanvas();
+      drawTempShape();
+    }
+  }
+
+  // Stop drawing
+  function stopDrawing() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    
+    if (currentTool === 'shape' && tempShape) {
+      drawingData.push({
+        tool: 'shape',
+        shape: tempShape.shape,
+        points: [
+          {x: tempShape.startX, y: tempShape.startY},
+          {x: tempShape.endX, y: tempShape.endY}
+        ],
+        color: tempShape.color,
+        size: tempShape.size
+      });
+      tempShape = null;
+    }
+  }
+
+  // Draw temporary shape (while dragging)
+  function drawTempShape() {
+    if (!tempShape) return;
+    
+    ctx.strokeStyle = tempShape.color;
+    ctx.lineWidth = tempShape.size;
+    ctx.beginPath();
+    
+    const width = tempShape.endX - tempShape.startX;
+    const height = tempShape.endY - tempShape.startY;
+    
+    switch(tempShape.shape) {
+      case 'rectangle':
+        ctx.rect(tempShape.startX, tempShape.startY, width, height);
+        break;
+      case 'circle':
+        const radius = Math.sqrt(width * width + height * height);
+        ctx.arc(tempShape.startX, tempShape.startY, radius, 0, Math.PI * 2);
+        break;
+      case 'square':
+        const size = Math.max(Math.abs(width), Math.abs(height));
+        const squareX = width < 0 ? tempShape.startX - size : tempShape.startX;
+        const squareY = height < 0 ? tempShape.startY - size : tempShape.startY;
+        ctx.rect(squareX, squareY, size, size);
+        break;
+      case 'triangle':
+        ctx.moveTo(tempShape.startX, tempShape.startY);
+        ctx.lineTo(tempShape.endX, tempShape.endY);
+        ctx.lineTo(tempShape.startX * 2 - tempShape.endX, tempShape.endY);
+        ctx.closePath();
+        break;
+      case 'line':
+                     ctx.moveTo(tempShape.startX, tempShape.startY);
+  	   ctx.lineTo(tempShape.endX, tempShape.endY);
+ 	    break;
+
+    }
+    
+    ctx.stroke();
+  }
+
+  // Redraw the entire canvas
+  function redrawCanvas() {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    for (const item of drawingData) {
+      if (item.tool === 'pen' || item.tool === 'eraser') {
+        drawPath(item);
+      } else if (item.tool === 'shape') {
+        drawShape(item);
+      }
+    }
+  }
+
+  // Draw a path (pen or eraser)
+  function drawPath(path) {
+    ctx.strokeStyle = path.color;
+    ctx.lineWidth = path.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    
+    const points = path.points;
+    ctx.moveTo(points[0].x, points[0].y);
+    
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    
+    ctx.stroke();
+  }
+
+  // Draw a shape
+  function drawShape(shape) {
+    ctx.strokeStyle = shape.color;
+    ctx.lineWidth = shape.size;
+    ctx.beginPath();
+    
+    const start = shape.points[0];
+    const end = shape.points[1];
+    const width = end.x - start.x;
+    const height = end.y - start.y;
+    
+    switch(shape.shape) {
+      case 'rectangle':
+        ctx.rect(start.x, start.y, width, height);
+        break;
+      case 'circle':
+        const radius = Math.sqrt(width * width + height * height);
+        ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
+        break;
+      case 'square':
+        const size = Math.max(Math.abs(width), Math.abs(height));
+        const squareX = width < 0 ? start.x - size : start.x;
+        const squareY = height < 0 ? start.y - size : start.y;
+        ctx.rect(squareX, squareY, size, size);
+        break;
+      case 'triangle':
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.lineTo(start.x * 2 - end.x, end.y);
+        ctx.closePath();
+        break;
+case 'line':
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  break;
+
+    }
+    
+    ctx.stroke();
+  }
+
+  // Clear the canvas
+  function clearCanvas() {
+    if (confirm('Are you sure you want to clear the canvas?')) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      saveState();
+      drawingData = [];
+      codeDisplay.innerText = '';
+    }
+  }
+
+  // Undo functionality
+  function undo() {
+    if (historyIndex <= 0) return;
+    
+    historyIndex--;
+    drawingData = JSON.parse(history[historyIndex]);
+    redrawCanvas();
+  }
+
+  // Redo functionality
+  function redo() {
+    if (historyIndex >= history.length - 1) return;
+    
+    historyIndex++;
+    drawingData = JSON.parse(history[historyIndex]);
+    redrawCanvas();
+  }
+
+  // Save current state to history
+  function saveState() {
+    history = history.slice(0, historyIndex + 1);
+    history.push(JSON.stringify(drawingData));
+    historyIndex = history.length - 1;
+  }
+
+  // Export code
+  function exportCode() {
+    const code = generatePythonCode();
+    codeDisplay.innerText = code;
+    codeDisplay.scrollTop = 0;
+  }
+
+  // Copy code to clipboard
+  function copyCode() {
+    if (!codeDisplay.innerText || codeDisplay.innerText.trim() === '') {
+      alert('No code to copy! Please generate code first.');
+      return;
+    }
+    
+    const textarea = document.createElement('textarea');
+    textarea.value = codeDisplay.innerText;
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      copyButton.textContent = 'Copied!';
+      setTimeout(() => {
+        copyButton.textContent = 'Copy Code';
+      }, 2000);
+    } catch (err) {
+      alert('Failed to copy code. Please try again or copy manually.');
+    }
+    
+    document.body.removeChild(textarea);
+  }
+
+  // Shape options visibility
+  function toggleShapeOptions(e) {
+    e.stopPropagation();
+    if (shapeOptions.style.display === 'block') {
+      hideShapeOptions();
+    } else {
+      showShapeOptions(e);
+    }
+  }
+
+  function showShapeOptions(e) {
+    const rect = e.target.getBoundingClientRect();
+    shapeOptions.style.display = 'block';
+    shapeOptions.style.left = `${rect.left}px`;
+    shapeOptions.style.top = `${rect.bottom}px`;
+  }
+
+  function hideShapeOptions() {
+    shapeOptions.style.display = 'none';
+  }
+
+  // Touch event handlers
+  function handleTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousedown', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    canvas.dispatchEvent(mouseEvent);
+  }
+
+  function handleTouchMove(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent('mousemove', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    canvas.dispatchEvent(mouseEvent);
+  }
+
+  // Helper functions
+  function getMousePos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (evt.clientX - rect.left) * scaleX,
+      y: (evt.clientY - rect.top) * scaleY
+    };
+  }
+
+  function setActiveTool(buttonId) {
+    document.querySelectorAll('#toolbar button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    if (buttonId) {
+      document.getElementById(buttonId).classList.add('active');
+    }
+  }
+
+//for generating python code
+
+  function generatePythonCode() {
+    if (drawingData.length === 0) return "# No drawing to export\n# Draw something first!";
+    
+    let code = '# Python Turtle Code Generated from Drawing\n';
+    code += 'import turtle\n\n';
+    code += '# Setup the drawing environment\n';
+    code += 'screen = turtle.Screen()\n';
+    code += 'screen.setup(800, 600)\n';
+    code += 'screen.bgcolor("white")\n';
+    code += 'screen.title("Your Drawing")\n\n';
+    code += 't = turtle.Turtle()\n';
+    code += 't.speed(0)  # Fastest drawing speed\n';
+    code += 't.hideturtle()  # Hide the turtle cursor\n\n';
+    
+    code += '# Drawing commands\n';
+    drawingData.forEach((data, index) => {
+      if (data.tool === 'pen' || data.tool === 'eraser') {
+        code += `# Path ${index + 1} (${data.tool})\n`;
+        code += `t.pensize(${data.size})\n`;
+        code += `t.pencolor("${data.color}")\n`;
+        
+        const start = data.points[0];
+        code += `t.penup()\nt.goto(${Math.round(start.x - 400)}, ${Math.round(300 - start.y)})\nt.pendown()\n`;
+        
+        for (let i = 1; i < data.points.length; i++) {
+          const pt = data.points[i];
+          code += `t.goto(${Math.round(pt.x - 400)}, ${Math.round(300 - pt.y)})\n`;
+        }
+        code += '\n';
+      } else if (data.tool === 'shape') {
+        code += `# Shape ${index + 1} (${data.shape})\n`;
+        code += `t.pensize(${data.size})\n`;
+        code += `t.pencolor("${data.color}")\n`;
+	
+        
+        const start = data.points[0];
+        const end = data.points[1];
+        const startX = Math.round(start.x - 400);
+        const startY = Math.round(300 - start.y);
+        const endX = Math.round(end.x - 400);
+        const endY = Math.round(300 - end.y);
+        
+        code += `t.penup()\nt.goto(${startX}, ${startY})\nt.pendown()\n`;
+        
+        switch(data.shape) {
+          case 'rectangle':
+            const width = endX - startX;
+            const height = endY - startY;
+            code += `for _ in range(2):\n`;
+            code += `    t.forward(${width})\n`;
+            code += `    t.left(90)\n`;
+            code += `    t.forward(${height})\n`;
+            code += `    t.left(90)\n`;
+            break;
+          case 'circle':
+            const radius = Math.round(Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2)));
+            code += `t.circle(${radius})\n`;
+            break;
+          case 'square':
+            const size = Math.round(Math.max(Math.abs(endX - startX), Math.abs(endY - startY)));
+            code += `for _ in range(4):\n`;
+            code += `    t.forward(${size})\n`;
+            code += `    t.left(90)\n`;
+            break;
+          case 'triangle':
+            code += `for _ in range(3):\n`;
+            code += `    t.forward(${Math.round((endX - startX) * 2)})\n`;
+            code += `    t.left(120)\n`;
+            break;
+	    case 'line':
+  // Calculate the distance between start and end points
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const distance = Math.round(Math.sqrt(deltaX * deltaX + deltaY * deltaY));
+
+  // Calculate the angle to turn towards the endpoint
+  const angle = Math.round(Math.atan2(deltaY, deltaX) * (180 / Math.PI));
+
+  // Move turtle to start position (assuming turtle is already at 0,0, add move code if needed)
+  code += `t.penup()\n`;
+  code += `t.goto(${startX}, ${startY})\n`;
+  code += `t.pendown()\n`;
+
+  // Turn turtle towards the endpoint
+  code += `t.setheading(${angle})\n`;
+
+  // Draw the line
+  code += `t.forward(${distance})\n`;
+  break;
+
+        }
+        code += '\n';
+      }
+    });
+    
+    code += '\n# Keep the window open\n';
+    code += 'turtle.done()\n';
+    
+    return code;
+  }
+
+  // Draggable divider
+  const divider = document.getElementById('divider');
+  const leftPane = document.getElementById('leftPane');
+  let isDragging = false;
+
+  divider.addEventListener('mousedown', () => {
+    isDragging = true;
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', handleDrag);
+    document.addEventListener('mouseup', stopDrag);
+  });
+
+  function handleDrag(e) {
+    if (!isDragging) return;
+    const newWidth = e.clientX;
+    const minWidth = 300;
+    const maxWidth = window.innerWidth - 300;
+    
+    if (newWidth > minWidth && newWidth < maxWidth) {
+      leftPane.style.width = `${newWidth}px`;
+    }
+  }
+
+  function stopDrag() {
+    isDragging = false;
+    document.body.style.cursor = 'default';
+    document.removeEventListener('mousemove', handleDrag);
+    document.removeEventListener('mouseup', stopDrag);
+  }
+
+  // Initialize the app
+  init();
+//download function
+function downloadCode() {
+  const code = codeDisplay.innerText;
+  if (!code.trim()) {
+    alert('No code to download! Please generate code first.');
+    return;
+  }
+  
+  const blob = new Blob([code], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'drawing_code.py';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+</script>
+</body>
+</html>
